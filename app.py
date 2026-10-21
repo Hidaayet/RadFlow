@@ -1,63 +1,74 @@
 import streamlit as st
-from workflows.xray import XRAY_STAGES
+from workflows.xray import XRAY_STAGES, assess_referral, assess_justification, assess_image_quality
 
-st.set_page_config(page_title="RadFlow | X-ray workflow", page_icon="🩻", layout="wide")
-
+st.set_page_config(page_title="RadFlow | X-ray", page_icon="🩻", layout="wide")
 st.title("🩻 RadFlow")
 st.subheader("Diagnostic X-ray workflow navigator")
-st.caption("Educational prototype • UK IR(ME)R framework • Not for clinical decision-making")
+st.write("An educational prototype for exploring a conventional diagnostic X-ray workflow using the UK IR(ME)R framework as a reference.")
+st.warning("Educational only — not a clinical decision-support tool. Follow applicable law, local procedures, and instructions of appropriately authorised staff.")
 
-st.info("Follow a conventional diagnostic X-ray request from referral through image review and reporting. Local procedures and professional judgement always apply.")
+with st.expander("About this prototype"):
+    st.markdown("- Demonstrates a workflow and example decision paths.\n- Does not verify real-world credentials, authorise exposures, or replace local policy.\n- IR(ME)R is a UK regulatory framework; do not assume it is Tunisian law.")
 
-st.sidebar.header("Workflow")
-st.sidebar.write("**Modality:** Plain-film X-ray")
-st.sidebar.write("**Scope:** Request → report")
-selected = st.sidebar.radio(
-    "Explore a stage",
-    options=list(range(len(XRAY_STAGES))),
-    format_func=lambda i: f"{i + 1}. {XRAY_STAGES[i]['title']}",
-    key="stage_index",
-)
+tab_workflow, tab_simulator, tab_roles = st.tabs(["Workflow overview", "Decision-path simulator", "Roles and principles"])
 
-left, right = st.columns([2, 1], gap="large")
-stage = XRAY_STAGES[selected]
-with left:
-    st.markdown(f"### Stage {selected + 1}: {stage['title']}")
-    st.write(stage["summary"])
-    st.markdown("**Key checks**")
-    for item in stage["checks"]:
-        st.markdown(f"- {item}")
-    if stage.get("decision"):
-        st.warning(f"Decision point: {stage['decision']}")
-    if stage.get("if_not"):
-        st.markdown(f"**If not satisfied:** {stage['if_not']}")
-with right:
-    st.markdown("### Responsibility")
-    st.write(stage["roles"])
-    st.markdown("### Why it matters")
-    st.write(stage["why"])
-    st.progress((selected + 1) / len(XRAY_STAGES), text=f"Stage {selected + 1} of {len(XRAY_STAGES)}")
+with tab_workflow:
+    st.header("X-ray workflow")
+    for i, stage in enumerate(XRAY_STAGES, start=1):
+        with st.expander(f"{i}. {stage['title']}", expanded=(i == 1)):
+            st.write(stage["summary"])
+            st.markdown("**Checks**")
+            for check in stage["checks"]:
+                st.markdown(f"- {check}")
+            st.markdown(f"**Roles:** {stage['roles']}")
+            st.markdown(f"**Why it matters:** {stage['why']}")
+            if stage.get("decision"):
+                st.markdown(f"**Decision point:** {stage['decision']}")
+                st.markdown(f"**If the checkpoint is not met:** {stage['if_not']}")
 
-previous_col, next_col = st.columns(2)
-with previous_col:
-    if selected > 0 and st.button("← Previous stage", use_container_width=True):
-        st.session_state.stage_index = selected - 1
-        st.rerun()
-with next_col:
-    if selected < len(XRAY_STAGES) - 1 and st.button("Next stage →", use_container_width=True):
-        st.session_state.stage_index = selected + 1
-        st.rerun()
+with tab_simulator:
+    st.header("Educational decision-path simulator")
+    st.caption("Use fictional scenarios only. This does not assess a real patient.")
+    referral_complete = st.radio("1. Is the referral complete enough to assess?", ["Yes", "No — clarification is needed"], key="referral")
+    referral_result = assess_referral(referral_complete == "Yes")
+    if not referral_result["can_proceed"]:
+        st.warning(referral_result["message"])
+        st.stop()
+    st.success(referral_result["message"])
 
+    justification = st.radio(
+        "2. For this simulation, has an appropriately entitled practitioner completed the justification and authorisation process?",
+        ["Yes", "No — process not completed", "No — exposure not justified"],
+        key="justification",
+    )
+    justification_result = assess_justification(justification)
+    if not justification_result["can_proceed"]:
+        if justification_result["status"] == "not_justified":
+            st.error(justification_result["message"])
+        else:
+            st.warning(justification_result["message"])
+        st.stop()
+    st.success(justification_result["message"])
+    st.info("Continue only within the relevant local procedure and the operator's scope of practice. Confirm identity, examination, preparation and protocol.")
 
-with st.expander("Scope and limitations"):
+    image_quality = st.radio("3. After acquisition, are the images diagnostically adequate?", ["Yes", "No — review is needed"], key="image_quality")
+    image_result = assess_image_quality(image_quality == "Yes")
+    if image_result["can_proceed"]:
+        st.success(image_result["message"])
+    else:
+        st.warning(image_result["message"])
+
+with tab_roles:
+    st.header("Roles and safety principles")
     st.markdown("""
-    - This is a learning and portfolio project, not a hospital-approved workflow.
-    - IR(ME)R is a UK regulatory framework; it should not be presented as Tunisian law.
-    - The practitioner is responsible for justification; authorisation demonstrates that justification has taken place.
-    - The operator performs only practical aspects for which they are entitled and follows local procedures.
-    - Pregnancy-related enquiries and actions depend on the individual, examination, clinical context, and local procedures.
-    - An imperfect image does not automatically justify repeating an exposure. The need for additional imaging must be assessed under local procedures.
-    """)
+- **Employer:** establishes procedures, protocols, training and entitlement arrangements.
+- **Referrer:** supplies relevant clinical information and requests the examination.
+- **Practitioner:** justifies the individual exposure and authorises it under applicable arrangements.
+- **Operator:** carries out practical aspects of the exposure within their entitlement.
+- **Reporting professional:** interprets images and communicates findings under the service's arrangements.
+""")
+    st.markdown("### Core principles")
+    st.markdown("- Justification must be completed before the exposure.\n- Optimisation aims for image quality adequate for the clinical purpose while limiting exposure appropriately.\n- An inadequate image does not automatically mean another exposure is warranted.\n- Urgent or unexpected findings should follow the defined communication and escalation pathway.")
 
-st.markdown("---")
-st.caption("Reference: UK Government, Guidance to the Ionising Radiation (Medical Exposure) Regulations 2017, updated 2024. See docs/references.md in the repository.")
+st.divider()
+st.caption("RadFlow portfolio prototype · Verify all content against current authoritative guidance and applicable local requirements before reuse.")

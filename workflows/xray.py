@@ -1,3 +1,5 @@
+"""Educational X-ray workflow content and decision rules. Not a clinical rule engine."""
+
 XRAY_STAGES = [
     {
         "title": "Clinical question and referral",
@@ -74,3 +76,51 @@ XRAY_STAGES = [
         "why": "The purpose of imaging is to inform clinical care; timely communication supports appropriate follow-up.",
     },
 ]
+
+def assess_referral(is_complete: bool) -> dict:
+    """Return the educational next step for referral completeness."""
+    if not is_complete:
+        return {
+            "status": "needs_clarification",
+            "can_proceed": False,
+            "message": "Seek clarification or missing information before proceeding.",
+        }
+    return {
+        "status": "ready_for_justification",
+        "can_proceed": True,
+        "message": "The referral can proceed to the justification stage.",
+    }
+
+def assess_justification(decision: str) -> dict:
+    """Evaluate a simulated justification checkpoint."""
+    if decision == "Yes":
+        return {
+            "status": "justified",
+            "can_proceed": True,
+            "message": "The simulated justification checkpoint has been passed.",
+        }
+    if decision == "No — exposure not justified":
+        return {
+            "status": "not_justified",
+            "can_proceed": False,
+            "message": "Do not perform the exposure. Follow the applicable process to consider an appropriate alternative or decline the request.",
+        }
+    return {
+        "status": "not_authorised",
+        "can_proceed": False,
+        "message": "Do not expose the patient until the required justification and authorisation process is complete.",
+    }
+
+def assess_image_quality(is_adequate: bool) -> dict:
+    """Return the educational next step after image-quality review."""
+    if not is_adequate:
+        return {
+            "status": "review_required",
+            "can_proceed": False,
+            "message": "Assess the cause of inadequate image quality and whether additional imaging is justified. Do not repeat automatically.",
+        }
+    return {
+        "status": "adequate",
+        "can_proceed": True,
+        "message": "Continue to image handling, interpretation and reporting.",
+    }
